@@ -484,8 +484,8 @@ end
 ##### Mocks
 Os mocks são para a fase de Verify, e são usados para testar comportamentos.
 
-# fase de setup
 ```ruby
+# fase de setup
 student = Student.new
 # fase de verificação
 expect(student).to receive(:bar)
