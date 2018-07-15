@@ -395,9 +395,7 @@ describe Array.new([1,2,3]), "Array", type: 'collection' do
 	end
 end
 ```
-===================================================
-
-======== Test Double ==============================
+##### Test Double
 Dublê de teste é um termo genérico para qualquer objeto falso, utilizado no lugar de um objeto real, para propósitos de testes.
 Usamos o método double para criar um dublê. Em outras palavras, um dublê age como um objeto Ruby, que pode ou não aceitar "mensagens" (métodos). Dublês são 'rigorosos'/strict, ou seja, você precisa indicar quais mensagens ele aceita.
 
