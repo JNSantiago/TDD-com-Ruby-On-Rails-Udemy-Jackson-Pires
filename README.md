@@ -567,3 +567,236 @@ config.generators do |g|
 	  	routing_specs: false
 end
 ```
+
+## Factory Girl/Bot e VCR
+
+##### Factory Girl / Factory Bot
+
+1) Instalação:
+
+```ruby
+group :development, :test do
+  gem 'factory_bot_rails', '~> 4.0'
+end
+```
+2) Configuração do spec/rails_helper:
+```ruby
+config.include FactoryBot::Syntax::Methods
+```
+3) Criar pasta spec/factories
+
+4) Exemplo de factorie: spec/factories/customer.rb
+```ruby
+FactoryBot.define do
+    factory :customer do
+        name "João Neto"
+        email "joao@neto.com"
+    end
+end
+```
+
+5) Usando a factory (build ou create)
+
+build (Não salva) e create (salva)
+```ruby
+RSpec.describe Custome, type: :model do
+    it 'Create a Custome' do
+        customer = create(:customer)
+        expect(customer.name).to eq("Joao")
+    end
+end
+```
+
+##### Gem Faker
+1) Instalar Faker no Gemfile
+```ruby
+group :development, :test do
+    ...
+    gem 'faker'
+end
+```
+2) Integrar com o factory
+```ruby
+FactoryBot.define do
+    factory :customer do
+        name Faker::Name.name
+        email Faker::Internet.email
+    end
+end
+```
+##### Herança
+
+Com o conceito de herança, podemos determinar os atributos esperados para uma determinada regra de negocio
+```ruby
+FactoryBot.define do
+    factory :customer do
+        name Faker::Name.name
+        email Faker::Internet.email
+        
+        factory :customer_vip do
+            vip true
+            days_to_pay 30
+        end
+
+        factory :customer_default do
+            vip false
+            days_to_pay 15
+        end
+    end
+end
+```
+```ruby
+# chama a fábrica customer_vip com os valores setados de vip edays_to_pay
+it 'Create a Custome' do
+    customer = create(:customer_vip)
+    expect(customer.vip).to eq(true)
+end
+
+# chama a fábrica customer_default com os valores setados de vip edays_to_pay
+it 'Create a Custome' do
+    customer = create(:customer_default)
+    expect(customer.vip).to eq(false)
+end
+```
+##### attributes_for
+```ruby
+# Devolve todos os atributos de customer
+it 'Create a Customer' do
+    attrs = attributes_for(:customer)
+    puts attrs
+end
+```
+##### Sequences
+```ruby
+FactoryBot.define do
+    factory :customer do
+        name Faker::Name.name
+        
+        sequence(:email) { |n| "meu_email-#{n}@email.com" }
+        
+        factory :customer_vip do
+            vip true
+            days_to_pay 30
+        end
+
+        factory :customer_default do
+            vip false
+            days_to_pay 15
+        end
+    end
+end
+```
+##### Associações - Belongs To
+```
+$ rails g model Order description customer:references
+```
+```ruby
+# O customer associa automaticamente e instancia o customer da fabrica caso ja esteja criado a mesma
+
+FactoryBot.define do
+    factory :customer do
+        customer
+    end
+end
+
+it 'Create a Order' do
+    order = create(:order)
+    expect(order.customer).to be_kind_of(Customer)
+end
+```
+ou
+```ruby
+it 'Sobrescrever um customer' do
+    customer = create(:customer)
+    order = create(:order, customer: customer)
+    expect(order.customer).to be_kind_of(Customer)
+end
+```
+##### Create List
+```ruby
+it 'Create a List' do
+    order = create_list(:order, 3)
+    expect(orders.count).to eq(3)
+end
+```
+##### Associações - has_many
+```ruby
+class Customer
+    has_many :orders
+class Order
+    belongsto :customer
+
+FactoryBot.define do
+    factory :customer do
+        name Faker::Name.name
+        email Faker::Internet.email
+
+        transient do
+            qtd_orders 3
+        end
+        
+        trait :with_orders do
+            after(:create) do |customer, evaluator|
+                create_list(:order, evaluator.qtd_orders, customer: customer)
+            end
+        end
+    end
+end
+
+it 'has_many' do
+    customer = create(:customer, :with_orders)
+    expect(customers.orders.count).to eq(3)
+end
+```
+##### FactoryBot Lint
+verifica as validações e avisa possiveis erros de validação
+```ruby
+# spec_helper.rb
+config.before(:suit) do
+    FactoryBot.lint
+end
+```
+##### HTTParty
+```ruby
+gem 'httparty'
+
+HTTParty.get('url')
+```
+##### Webmock
+Permite fazer chamadas fake a uma url, desabilita automaticamente o acesso ao http
+```ruby
+gem 'webmock'
+```
+```ruby
+# spec_helper
+require 'webmock/rspec'
+```
+```ruby
+it 'content_type' do
+    stub_request(:get, "https://jsonplaceholder.typicode.com/posts/2").
+        to_return(status: 200, body: "", headers: { 'content-type': 'application/json'})
+
+    response = HTTParty.get("https://jsonplaceholder.typicode.com/posts/3")
+    content_type = response.headers['content-type']
+    expect(content_type).to match(/application\/json/)
+end
+```
+##### VCR
+```ruby
+gem 'vcr'
+```
+```ruby
+VCR.configure do |config|
+    config.cassette_library_dir = "spec/fixtures/vcr_cassettes"
+    config.hook_into :webmock
+end
+```
+```ruby
+it 'content_type' do
+    VCR.use_cassette("jsonplaceholder/posts") do
+        response = HTTParty.get("https://jsonplaceholder.typicode.com/posts/3")
+        content_type = response.headers['content-type']
+        expect(content_type).to match(/application\/json/)
+    end
+end
+```
