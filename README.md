@@ -800,3 +800,382 @@ it 'content_type' do
     end
 end
 ```
+##### Testando Models
+```
+$ rails g model Category description
+$ rails g model Product description price:decimal category:references
+```
+# adicionar gem shoulda_matchers
+```ruby
+gem 'shoulda-matchers', '~> 3.1'
+```
+# rails_helpers
+```ruby
+Shoulda::Matchers.configure do |config|
+    config.integrate do |with|
+      with.test_framework :rspec
+      with.library :rails
+    end
+end
+```
+```ruby
+# app/models/product
+class Product < ApplicationRecord
+    belongs_to :category
+  
+    validates :description, :price, :category, presence: true
+  
+    def full_description
+      "#{self.description} - #{self.price}"
+    end
+end
+```
+```ruby
+# app/models/category
+class Category < ApplicationRecord
+end
+```
+// Gerar os arquivos de teste
+```
+$ rails g rspec:model product
+$ rails g rspec:model category
+```
+```ruby
+# spec/models/category_spec.rb
+require 'rails_helper'
+
+RSpec.describe Category, type: :model do
+  pending "add some examples to (or delete) #{__FILE__}"
+end
+```
+```ruby
+# spec/models/categories.rb
+FactoryBot.define do
+  factory :category do
+    description Faker::Commerce.department
+  end
+end
+```
+```ruby
+# spec/models/products.rb
+FactoryBot.define do
+  factory :product do
+    description Faker::Commerce.product_name
+    price Faker::Commerce.price
+    category
+  end
+end
+```
+```ruby
+# spec/models/product_spec.rb
+require 'rails_helper'
+
+RSpec.describe Product, type: :model do
+  it 'is valid with description, price and category' do
+    product = create(:product)
+    expect(product).to be_valid
+  end
+
+  context 'Validates' do
+    it { is_expected.to validate_presence_of(:description) }
+    it { is_expected.to validate_presence_of(:price) }
+    it { is_expected.to validate_presence_of(:category) }
+  end
+
+  context 'Associations' do
+    it { is_expected.to belong_to(:category) }
+  end
+
+  context 'Instance Methods' do
+    it '#full_description' do
+      product = create(:product)
+      expect(product.full_description).to eq("#{product.description} - #{product.price}")
+    end
+  end
+end
+```
+##### Testando controllers
+```ruby
+# para testar com o render_template
+gem 'rails-controller_testing'
+```
+```
+$ rails g rspec:controller customers
+$ rails g devise Member
+```
+```ruby
+# rails_helper.rb
+config.include Devise::Test::ControllerHelpers, :type => :controller
+config.include Warden::Test::Helpers
+```
+```ruby
+# app/controller/customers_controller.rb
+before_action :authenticate_member!, except: [:index, :show]
+```
+```ruby
+# spec/factories/members.rb
+FactoryBot.define do
+    factory :member do
+        email { Faker::Internet.email }
+        password '123456'
+        password_confirmation '123456'
+    end
+end
+```
+```ruby
+# spec/controllers/customers_controller_spec.rb
+RSpec.describe CustomersController, type: :controller do
+    # Requisição sem o devise
+    describe 'as a Guest' do
+        context '#index' do
+            it 'responds successfully' do
+                get :index
+                expect(response).to be_success
+            end
+
+            it 'responds a 200 response' do
+                get :index
+                expect(response).to have_http_status(200)
+            end
+            end
+
+            it 'responds a 302 response (not authorized)' do
+                customer = create(:customer)
+                get :show, params: { id: customer.id }
+                expect(response).to have_http_status(302)
+            end
+        end
+    end
+
+    describe 'as Logged Member' do
+        before do
+            @member = create(:member)
+            @customer = create(:customer)
+        end
+
+        it 'Route' do
+            is_expected.to route(:get, '/customers').to(action: :index)
+        end
+
+        it 'Content-Type JSON' do
+            customer_params = attributes_for(:customer)
+            sign_in @member
+            post :create, format: :json, params: { customer: customer_params }
+            expect(response.content_type).to eq('application/json')
+        end
+
+        it 'Flash Notice' do
+            customer_params = attributes_for(:customer)
+            sign_in @member
+            post :create, params: { customer: customer_params }
+            expect(flash[:notice]).to match(/successfully created/)
+        end
+
+        it 'with valid attributes' do
+            customer_params = attributes_for(:customer)
+            sign_in @member
+            expect{
+                post :create, params: { customer: customer_params }
+            }.to change(Customer, :count).by(1)
+        end
+
+        it 'with invalid attributes' do
+            customer_params = attributes_for(:customer, address: nil)
+            sign_in @member
+            expect{
+                post :create, params: { customer: customer_params }
+            }.not_to change(Customer, :count)
+        end
+
+        it 'responds a 200 response' do
+            sign_in @member
+            get :show, params: { id: @customer.id }
+            expect(response).to have_http_status(200)
+        end
+
+        it 'render a :show template' do
+            sign_in @member
+            get :show, params: { id: @customer.id }
+            expect(response).to render_template(:show)
+        end
+    end
+
+end
+```
+
+##### Testando views com Capybara
+```
+rails g rspec:feature
+```
+```ruby
+RSpec.feature "Customers", type: :feature do
+    it 'Visit index page' do
+        visit(customers_path)
+        expect(page).to have_current_path(customers_path)
+    end
+end
+```
+```ruby
+RSpec.feature "Customers", type: :feature do
+    it 'Visit index page' do
+        visit(customers_path)
+        print page.html # mostra um print da página no terminal
+        save_and_open_page # salva a página em memória
+        page.save_screenshoot('nome') # salva um print da página
+        expect(page).to have_current_path(customers_path)
+    end
+end
+```
+Configurando screenshoot
+```
+$ apt-get install chromium-chromedriver
+```
+```ruby
+gem 'selenium-webdriver'
+gem 'chromedriver-helper' # indispensável para o vagrant
+```
+```ruby
+# spec/spec_helper.rb
+Capybara.register_driver :chrome do |app|
+    Capybara::Selenium::Driver.new app, browser: :chrome,
+      options: Selenium::WebDriver::Chrome::Options.new(args: %w[headless disable-gpu])
+end
+Capybara.javascript_driver = :chrome
+Capybara.default_max_wait_time = 5
+```
+```ruby
+# quando o site usa js: true, ele consegue acessar o javascript da pagina
+RSpec.feature "Customers", type: :feature, js: true do
+    it 'Visit index page' do
+        visit(customers_path)
+        print page.html # mostra um print da página no terminal
+        save_and_open_page # salva a página em memória
+        page.save_screenshoot('nome') # salva um print da página
+        expect(page).to have_current_path(customers_path)
+    end
+end
+```
+Interagindo com formulários
+```ruby
+# configurando spec/rails_helper.rb para trabalhar com o devise
+config.include Warden::Test::Helpers
+
+it 'Creates a customer' do
+    # cria um membro e loga
+    member = create(:member)
+    login_as(member, :scope => :member)
+
+    # visita a página de cadastro
+    visit(new_customer_path)
+
+    # preenche os fields do formulário
+    fill_in('name', with: Faker::Name.name)
+    fill_in('address', with: Faker::Address.street_adress)
+    fill_in('name', with: Faker::Internet.email)
+
+    # clica no botão
+    click_button('Create Customer')
+
+    # resultado / teste
+    expect(page).to have_content('Customer was successfully created!')
+end
+```
+xPath = linguagem de consulta para selecionar nós de um xml/html
+```ruby
+page.has_xpath?('.//table/tr')
+```
+Instalar o xPath Helper extensão para o chrome, ajuda a obter o caminho xpath
+
+Ajax
+```ruby
+it 'Ajax' do
+    visit(customers_path)
+    click_link('Add Message')
+    expect(page).to have_content(Yes!)
+end
+```
+Find
+```ruby
+find_field('First Name').value
+```
+```
+require 'rails_helper'
+require_relative '../support/new_customer_form'
+
+RSpec.feature "Customers", type: :feature, js: true do
+    let(:new_customer_form) { NewCustomerForm.new }
+
+    it 'Visit index page' do
+      visit(customers_path)
+      page.save_screenshot('screenshot.png')
+      expect(page).to have_current_path(customers_path)
+    end
+
+    it 'Ajax' do
+      visit(customers_path)
+      click_link('Add Message')
+      expect(page).to have_content('Yes!')
+    end
+
+    it 'Find' do
+      visit(customers_path)
+      click_link('Add Message')
+      expect(find('#my-div').find('h1')).to have_content('Yes!')
+    end
+
+    it 'Creates a Customer - Page Object Pattern' do
+      new_customer_form.login.visit_page.fill_in_with(
+        name: Faker::Name.name,
+        email: Faker::Internet.email,
+        address: Faker::Address.street_address
+      ).submit
+
+      expect(page).to have_content('Customer was successfully created.')
+    end
+
+    it 'Creates a Customer' do
+      member = create(:member)
+      login_as(member, :scope => :member)
+
+      visit(new_customer_path)
+
+      fill_in('Name', with: Faker::Name.name)
+      fill_in('Email', with: Faker::Internet.email)
+      fill_in('Address', with: Faker::Address.street_address)
+
+      click_button('Create Customer')
+
+      expect(page).to have_content('Customer was successfully created.')
+    end
+end
+```
+```ruby
+class NewCustomerForm
+    include Capybara::DSL  # Capybara
+    include FactoryBot::Syntax::Methods  # FactoryBot
+    include Warden::Test::Helpers  # Devise
+    include Rails.application.routes.url_helpers  # Routes
+  
+    def login
+      member = create(:member)
+      login_as(member, :scope => :member)
+      self
+    end
+  
+    def visit_page
+      visit(new_customer_path)
+      self
+    end
+  
+    def fill_in_with(params = {})
+      fill_in('Name', with: params.fetch(:name, Faker::Name.name))
+      fill_in('Email', with: params.fetch(:email, Faker::Internet.email))
+      fill_in('Address', with: params.fetch(:address, Faker::Address.street_address))
+      self
+    end
+  
+    def submit
+      click_button('Create Customer')
+    end
+  end
+  ```
